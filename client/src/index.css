@@ -126,12 +126,27 @@ button:disabled {
 }
 
 
+
 .dashboard {
   min-height: 100vh;
   display: flex;
+  align-items: stretch;
   background: #f5f7fb;
   color: #172554;
 }
+
+.sidebar {
+  flex: 0 0 245px;
+  width: 245px;
+  min-height: 100vh;
+}
+
+.dashboard-main {
+  flex: 1;
+  min-width: 0;
+  padding: 30px;
+}
+
 
 .sidebar {
   width: 245px;
@@ -501,4 +516,196 @@ button.nav-item:focus-visible {
 
 .csv-upload-button input:disabled {
   cursor: not-allowed;
+}
+
+/* Identix dashboard styles */
+.dashboard .topbar {
+  margin-bottom: 0;
+  padding-bottom: 24px;
+}
+
+.dashboard .stat-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.dashboard .stat-card p {
+  margin: 0 0 7px;
+}
+
+.dashboard .stat-card strong {
+  font-size: 24px;
+}
+
+.dashboard .button {
+  margin-top: 0;
+}
+
+.dashboard .search-box input {
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.dashboard .search-box input:focus {
+  outline: none;
+}
+
+.dashboard .status-select {
+  width: auto;
+  margin: 0;
+}
+
+.dashboard .icon-button {
+  margin-top: 0;
+  padding: 0;
+}
+
+.dashboard .records-card {
+  padding: 0;
+}
+
+.dashboard .records-card th,
+.dashboard .records-card td {
+  border-bottom: 1px solid #edf0f5;
+}
+
+.dashboard footer {
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .dashboard {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+    flex-basis: auto;
+  }
+
+  .dashboard-main {
+    width: 100%;
+    padding: 20px;
+  }
+}
+
+
+@media (max-width: 768px) {
+  .dashboard {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-height: auto;
+    flex: 0 0 auto;
+  }
+
+  .dashboard-main {
+    width: 100%;
+    min-width: 0;
+    padding: 16px;
+  }
+
+  .records-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .search-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  table {
+    min-width: 700px;
+  }
+}
+
+
+@media (max-width: 768px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .stat-card {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+  }
+
+  .stat-card p {
+    overflow-wrap: anywhere;
+  }
+
+  .dashboard-main {
+    min-width: 0;
+    width: 100%;
+    padding: 16px;
+  }
+
+  .records-toolbar {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .search-input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .table-wrapper {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .table-wrapper table {
+    min-width: 700px;
+  }
+}
+
+
+/* Student verification status badges */
+.status {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status.verified {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.status.pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.status.rejected {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.status.correction_required {
+  background-color: #dbeafe;
+  color: #1e40af;
 }

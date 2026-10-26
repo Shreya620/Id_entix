@@ -3,6 +3,9 @@ const express = require("express");
 const cors = require("cors");
 const studentRoutes = require("./routes/studentRoutes");
 const institutionRoutes = require("./routes/institutionRoutes");
+const batchRoutes = require("./routes/batchRoutes");
+const adminRoutes = require("./routes/adminRoutes");
+const adminBatchRoutes = require("./routes/adminBatchRoutes");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
@@ -15,7 +18,9 @@ app.use(express.json());
 
 app.use("/api/students", studentRoutes);
 app.use("/api/institutions", institutionRoutes);
-
+app.use("/api/batches", batchRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/admin/batches", adminBatchRoutes);
 // Home route
 app.get("/", (req, res) => {
   res.status(200).json({

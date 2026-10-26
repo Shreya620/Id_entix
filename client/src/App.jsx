@@ -11,6 +11,9 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [loadingStudents, setLoadingStudents] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedStudentIds, setSelectedStudentIds] = useState([]);
+  const [submittingBatch, setSubmittingBatch] = useState(false);
+  const [batchMessage, setBatchMessage] = useState("");
 
   const [institution, setInstitution] = useState(() => {
     try {
@@ -23,6 +26,32 @@ function App() {
   });
 
   const [students, setStudents] = useState([]);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editForm, setEditForm] = useState({
+    studentName: "",
+    rollNumber: "",
+    apaarId: "",
+    course: "",
+    academicYear: "",
+  });
+  
+
+const downloadCSVTemplate = () => {
+  const csv =
+    "studentName,rollNumber,apaarId,course,academicYear\n" +
+    "Example Student,ROLL001,123456789012,BTech,2026";
+
+  const blob = new Blob([csv], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "identix_student_template.csv";
+  link.click();
+  URL.revokeObjectURL(url);
+};
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("Dashboard");
 
@@ -206,6 +235,15 @@ const handleCSVUpload = async (event) => {
       .includes(search.toLowerCase())
   );
 
+
+  const verificationStudents = filteredStudents.filter(
+    (student) =>
+    !student.verificationStatus ||
+    student.verificationStatus === "pending" ||
+    student.verificationStatus === "correction_required"
+  );
+
+
   const verified = students.filter(
     (student) => student.verificationStatus === "verified"
   ).length;
@@ -220,8 +258,86 @@ const handleCSVUpload = async (event) => {
     (student) => student.verificationStatus === "rejected"
   ).length;
 
+  const correctionRequired = students.filter(
+  (student) =>
+    student.verificationStatus === "correction_required"
+).length;
+
+
+const saveStudentEdit = async () => {
+  if (!editingStudent) return;
+
+  try {
+    const token = localStorage.getItem("identixToken");
+
+    await axios.patch(
+      `${API_URL}/students/${editingStudent._id}`,
+      editForm,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    setEditingStudent(null);
+    await fetchStudents();
+  } catch (error) {
+    console.error("Unable to update student:", error);
+    alert(
+      error.response?.data?.message ||
+      "Failed to update student details."
+    );
+  }
+};
+
+
+const submitBatch = async () => {
+  if (selectedStudentIds.length === 0) {
+    setBatchMessage("Please select at least one pending student.");
+    return;
+  }
+
+  try {
+    setSubmittingBatch(true);
+    setBatchMessage("");
+
+    const token = localStorage.getItem("identixToken");
+
+    const response = await fetch(
+      "http://localhost:5001/api/batches/submit",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          studentIds: selectedStudentIds,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Batch submission failed");
+    }
+
+    setBatchMessage(
+      `Batch submitted! Reference: ${data.batch.batchReference}`
+    );
+    setSelectedStudentIds([]);
+  } catch (error) {
+    setBatchMessage(error.message);
+  } finally {
+    setSubmittingBatch(false);
+  }
+};
+
+
   // Student records table
-  const StudentTable = () => (
+  const renderStudentTable = () => (
     <>
       <div className="records-toolbar">
         <div>
@@ -245,20 +361,64 @@ const handleCSVUpload = async (event) => {
           onChange={(event) => setSearch(event.target.value)}
         />
 
-        {activeTab === "Student Records" && (
-          <label className="csv-upload-button">
-          {uploadingCSV ? "Uploading CSV..." : "↑ Upload CSV"}
-          <input
-             type="file"
-            accept=".csv,text/csv"
-            onChange={handleCSVUpload}
-            disabled={uploadingCSV}
-            hidden
-           />
-          </label>
-        )}
+        
+{activeTab === "Student Records" && (
+  <>
+    <button
+      type="button"
+      onClick={downloadCSVTemplate}
+      className="template-download-button"
+    >
+      Download CSV Template
+    </button>
+
+    <label className="csv-upload-button">
+      {uploadingCSV ? "Uploading CSV..." : "↑ Upload CSV"}
+      <input
+        type="file"
+        accept=".csv,text/csv"
+        onChange={handleCSVUpload}
+        disabled={uploadingCSV}
+        hidden
+      />
+    </label>
+  </>
+)}
+
 
       </div>
+
+
+{activeTab === "Student Records" && (
+  <div className="batch-controls">
+    <button
+      type="button"
+      onClick={() => {
+        const pendingIds = filteredStudents
+          .filter(
+            (student) =>
+              (student.verificationStatus || "pending") === "pending"
+          )
+          .map((student) => student._id);
+
+        setSelectedStudentIds(pendingIds);
+      }}
+    >
+      Select All Pending
+    </button>
+
+    <button
+      type="button"
+      onClick={submitBatch}
+      disabled={submittingBatch || selectedStudentIds.length === 0}
+    >
+      {submittingBatch ? "Submitting..." : `Submit Batch (${selectedStudentIds.length})`}
+    </button>
+
+    {batchMessage && <p>{batchMessage}</p>}
+  </div>
+)}
+
 
       {loadingStudents ? (
         <p className="empty-state">Loading student records...</p>
@@ -267,6 +427,7 @@ const handleCSVUpload = async (event) => {
           <table>
             <thead>
               <tr>
+                <th>Select</th>
                 <th>Student Name</th>
                 <th>Roll Number</th>
                 <th>APAAR ID</th>
@@ -279,19 +440,36 @@ const handleCSVUpload = async (event) => {
 
             <tbody>
               {filteredStudents.length > 0 ? (
-                filteredStudents.map((student) => {
+              (activeTab === "Verification"
+                ? verificationStudents
+                : filteredStudents
+              ).map((student) => {
                   const status =
                     student.verificationStatus || "pending";
 
                   return (
                     <tr key={student._id}>
                       <td>
+                        <input
+                        type="checkbox"
+                        checked={selectedStudentIds.includes(student._id)}
+                         disabled={status !== "pending"}
+                         onChange={(e) => {
+                           setSelectedStudentIds((prev) =>
+                             e.target.checked
+                               ? [...prev, student._id]
+                               : prev.filter((id) => id !== student._id)
+                            );
+                          }}
+                       />
+                      </td>
+                      <td>
                         <strong>{student.studentName || "—"}</strong>
                       </td>
                       <td>{student.rollNumber || "—"}</td>
                       <td>{student.apaarId || "—"}</td>
                       <td>{student.course || "—"}</td>
-                      <td>{student.academicSession || "—"}</td>
+                      <td>{student.academicYear || student.academicSession || "—"}</td>
                       
                       <td>
                         <span className={`status ${status}`}>
@@ -300,6 +478,23 @@ const handleCSVUpload = async (event) => {
                       </td>
 
 <td>
+
+<button
+  type="button"
+  onClick={() => {
+    setEditingStudent(student);
+    setEditForm({
+      studentName: student.studentName || "",
+      rollNumber: student.rollNumber || "",
+      apaarId: student.apaarId || "",
+      course: student.course || "",
+      academicYear: student.academicYear || "",
+    });
+  }}
+>
+  Edit
+</button>
+
   <button
     type="button"
     onClick={() =>
@@ -319,6 +514,17 @@ const handleCSVUpload = async (event) => {
   >
     Reject
   </button>
+
+<button
+  type="button"
+  onClick={() =>
+    updateStudentStatus(student._id, "correction_required")
+  }
+  disabled={status === "correction_required"}
+>
+  Correction Required
+</button>
+
 </td>
 
                     </tr>
@@ -326,13 +532,86 @@ const handleCSVUpload = async (event) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="empty-state">
+                  <td colSpan={8} className="empty-state">
                     No student records found.
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
+        </div>
+      
+      )}
+
+      {editingStudent && (
+        <div className="edit-form">
+          <h2>Edit Student Details</h2>
+
+          <input
+            placeholder="Student Name"
+            value={editForm.studentName}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                studentName: e.target.value,
+              })
+            }
+          />
+
+          <input
+            placeholder="Roll Number"
+            value={editForm.rollNumber}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                rollNumber: e.target.value,
+              })
+            }
+          />
+
+          <input
+            placeholder="APAAR ID"
+            value={editForm.apaarId}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                apaarId: e.target.value,
+              })
+            }
+          />
+
+          <input
+            placeholder="Course"
+            value={editForm.course}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                course: e.target.value,
+              })
+            }
+          />
+
+          <input
+            placeholder="Academic Year"
+            value={editForm.academicYear}
+            onChange={(e) =>
+              setEditForm({
+                ...editForm,
+                academicYear: e.target.value,
+              })
+            }
+          />
+
+          <button type="button" onClick={saveStudentEdit}>
+            Save Changes
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setEditingStudent(null)}
+          >
+            Cancel
+          </button>
         </div>
       )}
     </>
@@ -505,23 +784,29 @@ const handleCSVUpload = async (event) => {
                 <h2>{rejected}</h2>
                 <span>Require review</span>
               </div>
+
+              <div className="stat-card">
+                <p>Correction Required</p>
+                <h2>{correctionRequired}</h2>
+                <span>Records needing correction</span>
+              </div>
             </section>
 
             <section className="records-section">
-              <StudentTable />
+              {renderStudentTable()}
             </section>
           </>
         )}
 
         {activeTab === "Student Records" && (
           <section className="records-section">
-            <StudentTable />
+            {renderStudentTable()}
           </section>
         )}
 
         {activeTab === "Verification" && (
           <section className="records-section">
-            <StudentTable />
+            {renderStudentTable()}
           </section>
         )}
 

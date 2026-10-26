@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import "./index.css";
 
-const API_URL = "http://localhost:5001/api";
+const API_URL = "https://id-entix-backend.onrender.com/api";
 
 function App() {
   const [email, setEmail] = useState("");
@@ -305,7 +305,7 @@ const submitBatch = async () => {
     const token = localStorage.getItem("identixToken");
 
     const response = await fetch(
-      "http://localhost:5001/api/batches/submit",
+      "https://id-entix-backend.onrender.com/api/batches/submit",
       {
         method: "POST",
         headers: {

@@ -32,13 +32,39 @@ const upload = multer({
 });
 
 // Parse CSV using explicit column names
+
 function parseCsvBuffer(buffer) {
   return new Promise((resolve, reject) => {
     const students = [];
     const csvText = buffer.toString("utf8").replace(/^\uFEFF/, "");
 
+    if (!csvText.trim()) {
+      return reject(new Error("CSV file is empty"));
+    }
+
+    let headers = [];
+
     Readable.from([csvText])
-      .pipe(csv({ mapHeaders: ({ header }) => header.trim() }))
+      .pipe(
+        csv({
+          mapHeaders: ({ header }) => header.trim(),
+        })
+      )
+      .on("headers", (receivedHeaders) => {
+        headers = receivedHeaders;
+
+        const missingHeaders = CSV_HEADERS.filter(
+          (header) => !headers.includes(header)
+        );
+
+        if (missingHeaders.length > 0) {
+          reject(
+            new Error(
+              `Missing required column(s): ${missingHeaders.join(", ")}`
+            )
+          );
+        }
+      })
       .on("data", (row) => {
         const student = {
           studentName: String(row.studentName || "").trim(),
@@ -47,19 +73,45 @@ function parseCsvBuffer(buffer) {
           course: String(row.course || "").trim(),
           academicYear: String(row.academicYear || "").trim(),
         };
-        if (Object.values(student).every((v) => v === "")) return;
+
+        if (Object.values(student).every((value) => value === "")) {
+          return;
+        }
+
         students.push(student);
       })
-      .on("end", () => resolve(students))
+      .on("end", () => {
+        if (headers.length === 0) {
+          return reject(
+            new Error("CSV header row is missing or invalid")
+          );
+        }
+
+        const missingHeaders = CSV_HEADERS.filter(
+          (header) => !headers.includes(header)
+        );
+
+        if (missingHeaders.length > 0) {
+          return reject(
+            new Error(
+              `Missing required column(s): ${missingHeaders.join(", ")}`
+            )
+          );
+        }
+
+        resolve(students);
+      })
       .on("error", reject);
   });
 }
+
 
 // Validate student records
 async function validateStudents(institutionId, students) {
   const errors = [];
   const validRecords = [];
   const seenRollNumbers = new Set();
+  const seenApaarIds = new Set();
 
   for (let i = 0; i < students.length; i++) {
     const student = students[i];
@@ -79,8 +131,25 @@ async function validateStudents(institutionId, students) {
       rowErrors.push("Roll number is required");
     }
 
-    if (apaarId && !/^\d{12}$/.test(apaarId)) {
+    if (!apaarId) {
+      rowErrors.push("APAAR ID is required");
+    } else if (!/^\d{12}$/.test(apaarId)) {
       rowErrors.push("APAAR ID must contain exactly 12 digits");
+    } else {
+       if (seenApaarIds.has(apaarId)) {
+         rowErrors.push("Duplicate APAAR ID in uploaded CSV");
+        }
+
+        seenApaarIds.add(apaarId);
+
+        const existingApaarId = await Student.exists({
+          institutionId,
+          apaarId,
+       });
+
+       if (existingApaarId) {
+       rowErrors.push("APAAR ID already exists in this institution");
+      }
     }
 
     const normalizedRollNumber = rollNumber.toLowerCase();
@@ -248,12 +317,21 @@ router.post(
         });
       }
 
+
       return res.json({
         success: true,
         message: "Student CSV import completed",
         summary: {
-          ...result.summary,
+          totalRecords: result.summary.totalRecords,
           savedRecords: savedStudents.length,
+          errorRejectedRecords: result.summary.invalidRecords,
+          duplicateSkippedRecords: result.errors.filter((item) =>
+            item.errors.some(
+              (error) =>
+                error.toLowerCase().includes("duplicate") ||
+                error.toLowerCase().includes("already exists")
+            )
+          ).length,
         },
         errors: result.errors,
         savedStudents,
@@ -263,11 +341,12 @@ router.post(
 
       return res.status(500).json({
         success: false,
-        message: "Failed to import CSV records",
+        message: error.message || "Failed to import CSV records",
       });
     }
   }
 );
+
 
 // GET /api/students/institution/:institutionId
 // Fetch students belonging to the authenticated institution
@@ -539,5 +618,30 @@ router.delete("/:studentId", authMiddleware, async (req, res) => {
     });
   }
 });
+
+
+router.use((error, req, res, next) => {
+  if (error instanceof multer.MulterError) {
+    const message =
+      error.code === "LIMIT_FILE_SIZE"
+        ? "File size exceeds the 2 MB limit"
+        : error.message;
+
+    return res.status(400).json({
+      success: false,
+      message,
+    });
+  }
+
+  if (error.message === "Only CSV files are allowed") {
+    return res.status(400).json({
+      success: false,
+      message: "Only CSV files are allowed. Please select a .csv file.",
+    });
+  }
+
+  next(error);
+});
+
 
 module.exports = router;

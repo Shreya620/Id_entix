@@ -508,6 +508,7 @@ button.nav-item:focus-visible {
   cursor: pointer;
   white-space: nowrap;
   font-size: 14px;
+  position: relative;
 }
 
 .csv-upload-button:hover {
